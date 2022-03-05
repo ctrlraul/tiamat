@@ -8,7 +8,7 @@ export function chunk <T> (array: T[], chunkLength: number): T[][] {
     throw new Error(`Chunk length can't be infinite`)
   }
   
-  const result = []
+  const result: T[][] = []
   let start = 0
 
   do {

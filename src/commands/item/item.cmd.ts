@@ -138,7 +138,7 @@ export const command: Command = {
     try {
 
       const itemsPack = await getItemsPack()
-      const query = comparisonSafe(interaction.options.getString('name'))
+      const query = comparisonSafe(interaction.options.getString('name', true))
       const ephemeral = true //!interaction.options.getBoolean('public')
 
       let matches: WUItem[] = []
