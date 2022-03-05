@@ -16,6 +16,10 @@ const matchAllNumbersAtTheEnd = /(\d+)\/?$/
 
 async function getMessagesToDelete (interaction: Discord.CommandInteraction, messageID: string) {
 
+  if (interaction.channel === null) {
+    throw new Error('Trying to get messages in null channel')
+  }
+
   const messagesToDelete: Discord.Message[] = []
   const message = await interaction.channel.messages.fetch(messageID)
 
@@ -28,7 +32,7 @@ async function getMessagesToDelete (interaction: Discord.CommandInteraction, mes
 
   // Got the maximum messages, so let's check if there is more
   if (messagesToDelete.length === 100) {
-    const more = await getMessagesToDelete(interaction, next100Messages.last().id)
+    const more = await getMessagesToDelete(interaction, next100Messages.last()!.id)
     messagesToDelete.push(...more)
   }
 
@@ -65,6 +69,11 @@ export const command: Command = {
 
   async execute (interaction) {
 
+    if (interaction.channel === null) {
+      return
+    }
+
+
     // Ignore attempts to purge DMs, we can't do that
     if (interaction.channel.type === 'DM') {
       interaction.reply({ content: `I can't purge DMs` })
@@ -72,11 +81,8 @@ export const command: Command = {
     }
 
 
-    const msgLinkOrID = interaction.options.getString('link')
+    const msgLinkOrID = interaction.options.getString('link', true)
     const match = msgLinkOrID.match(matchAllNumbersAtTheEnd)
-
-
-    console.log('ID: ' + match[1])
 
 
     if (match === null) {
@@ -120,7 +126,7 @@ export const command: Command = {
         }
 
 
-        const lines = []
+        const lines: string[] = []
 
         if (successfulDeletesCount > 0) {
           lines.push(`Deleted ${successfulDeletesCount} messages.`)

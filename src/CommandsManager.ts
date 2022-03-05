@@ -36,6 +36,10 @@ const commandFileTest = /\.cmd\.\w+$/
 
 export async function setGuildCommands (client: Discord.Client, commandsMap: Record<string, Command>, guildID: string) {
 
+  if (client.token === null || client.user === null) {
+    throw new Error('Login before setting the commands!')
+  }
+
   rest.setToken(client.token)
 
   const commands = Object.values(commandsMap)
@@ -104,7 +108,11 @@ export function importCommands (commandsDirectory: string): Record<string, Impor
 }
 
 
-export function handleInteraction (commands: Record<string, Command>, interaction: CommandInteraction) {
+export function handleInteraction (commands: Record<string, ImportedCommand>, interaction: CommandInteraction) {
+
+  if (interaction.member === null) {
+    return
+  }
 
   if (interaction.commandName in commands) {
 
