@@ -118,6 +118,8 @@ export function handleInteraction (commands: Record<string, ImportedCommand>, in
 
     const command = commands[interaction.commandName]
 
+    console.log('[CommandsManager] Handling command:', command.data.name)
+
     if (typeof interaction.member.permissions === 'string') {
 
       interaction.reply({ content: `I have encountered an error! ${interaction.member.permissions}` })
