@@ -6,10 +6,12 @@ import Discord, { Collection } from 'discord.js'
 import { SlashCommandBuilder } from '@discordjs/builders'
 import { Command } from '../CommandsManager';
 import { chunk } from '../utils/chunk';
+import { env } from '../utils/env'
 
 
 
 const matchAllNumbersAtTheEnd = /(\d+)\/?$/
+let logsChannel: Discord.TextBasedChannel
 
 
 // Functions
@@ -20,8 +22,12 @@ async function getMessagesToDelete (interaction: Discord.CommandInteraction, mes
     throw new Error('Trying to get messages in null channel')
   }
 
-  const messagesToDelete: Discord.Message[] = []
   const message = await interaction.channel.messages.fetch(messageID)
+  const messagesToDelete: Discord.Message[] = [message]
+
+  if (passedTwoWeeks(message.createdTimestamp)) {
+    throw new Error(`Can't delete messages that are over two weeks old!`)
+  }
 
   const next100Messages = await interaction.channel.messages.fetch({
     after: message.id,
@@ -52,7 +58,7 @@ function passedTwoWeeks (timestamp: number) {
 
 export const command: Command = {
 
-  disabled: true,
+  // disabled: true,
 
   permissions: ['MANAGE_MESSAGES'],
 
@@ -64,13 +70,31 @@ export const command: Command = {
       .setRequired(true)
     )
     .setName('purge')
-    .setDescription('Delete all messages after one specific message'),
+    .setDescription('Deletes a message and everything after it'),
 
 
-  async execute (interaction) {
+  async execute (interaction, cmd) {
 
-    if (interaction.channel === null) {
+    if (interaction.channel === null || interaction.guild === null) {
       return
+    }
+
+
+    // Make sure we can log who's purging
+    if (logsChannel === undefined) {
+
+      const channel = await interaction.guild.channels.fetch(env('LOGS_CHANNEL_ID'))
+
+      if (channel === null) {
+        throw new Error('Failed to fetch logs channel')
+      }
+
+      if (!channel.isText()) {
+        throw new Error('Logs channel must be a text channel')
+      }
+
+      logsChannel = channel
+
     }
 
 
@@ -117,10 +141,15 @@ export const command: Command = {
           }
 
           try {
+
             await interaction.channel.bulkDelete(collection)
+
             successfulDeletesCount += batch.length
+
           } catch (err: any) {
+
             failedDeletesCount += batch.length
+
           }
 
         }
@@ -129,31 +158,47 @@ export const command: Command = {
         const lines: string[] = []
 
         if (successfulDeletesCount > 0) {
-          lines.push(`Deleted ${successfulDeletesCount} messages.`)
+          lines.push(`Successfuly deleted ${successfulDeletesCount} messages`)
         }
 
         if (failedDeletesCount > 0) {
-          lines.push(`Failed to delete ${failedDeletesCount} messages.`)
+          lines.push(`Failed to delete ${failedDeletesCount} messages`)
         }
 
         if (tooOldCount > 0) {
-          lines.push(`${tooOldCount} messages are too old to be deleted.`)
+          lines.push(`${tooOldCount} messages are too old to be deleted`)
         }
 
         if (lines.length === 0) {
-          lines.push('Succesfuly did nothing!')
+          lines.push('Succesfuly did nothing')
         }
 
 
+        // Feedback
         interaction.reply({
           content: lines.join('\n'),
           ephemeral: true
         })
 
+
+        // Log
+        const embed = new Discord.MessageEmbed()
+
+        embed.setAuthor({
+          name: `${interaction.user.tag} (${interaction.user.id})`,
+          iconURL: interaction.user.avatarURL() || interaction.user.defaultAvatarURL,
+        })
+        
+        embed.setDescription(`**/${cmd.data.name}** called in ${interaction.channel.toString()}\n\n${lines.join('\n')}`)
+        embed.setColor('#aa2211')
+
+        logsChannel.send({ embeds: [embed] })
+          .catch(err => console.error('Failed to send embed in logs channel:', err))
+
       } catch (err: any) {
 
         interaction.reply({
-          content: 'Failed to purge! ' + err.message,
+          content: 'Failed to purge: ' + err.message,
           ephemeral: true
         })
         
