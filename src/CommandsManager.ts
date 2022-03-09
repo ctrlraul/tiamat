@@ -14,13 +14,13 @@ export interface Command {
   disabled?: boolean
   permissions?: Discord.PermissionString[]
   data: SlashCommandBuilder
-  execute: (interaction: Discord.CommandInteraction) => (void | Promise<void>)
+  execute: (interaction: Discord.CommandInteraction, command: ImportedCommand) => (void | Promise<void>)
 }
 
 export interface ImportedCommand {
   permissions: Discord.PermissionString[]
   data: SlashCommandBuilder
-  execute: (interaction: Discord.CommandInteraction) => (void | Promise<void>)
+  execute: (interaction: Discord.CommandInteraction, command: ImportedCommand) => (void | Promise<void>)
 }
 
 
@@ -126,7 +126,7 @@ export function handleInteraction (commands: Record<string, ImportedCommand>, in
 
     } else if (hasPermissions(interaction.member.permissions, command.permissions)) {
 
-      command.execute(interaction)
+      command.execute(interaction, command)
 
     } else {
 
