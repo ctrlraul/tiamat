@@ -8,7 +8,7 @@ import axios, { AxiosResponse } from 'axios'
 
 // Config
 
-const ITEMS_PACK_URL = 'https://gist.githubusercontent.com/ctrl-raul/3b5669e4246bc2d7dc669d484db89062/raw/'
+const ITEMS_PACK_URL = 'https://gist.githubusercontent.com/ctrlraul/3b5669e4246bc2d7dc669d484db89062/raw/'
 const ELEMENT_COLORS: Record<WUItem['element'], ColorResolvable> = {
   PHYSICAL: '#ffaa00',
   EXPLOSIVE: '#aa1111',
