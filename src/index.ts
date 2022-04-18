@@ -2,25 +2,40 @@ import { Client, Intents } from 'discord.js'
 import { join } from 'path'
 import { env } from './utils/env'
 import * as CommandsManager from './CommandsManager'
+import { AutoThreader } from './AutoThreader'
 
 
 
 // Config
 
-const SUPERMECHS_GUILD_ID = '787831902462672896'
 const COMMANDS_DIRECTORY = join(__dirname, 'commands')
 
 
 
 // Client
 
-const client = new Client({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.GUILD_MESSAGES] })
 const commands = CommandsManager.importCommands(COMMANDS_DIRECTORY)
+const artworkThreader = new AutoThreader()
+const client = new Client({ intents: [
+  Intents.FLAGS.GUILDS,
+  Intents.FLAGS.GUILD_MESSAGES
+]})
 
 client.login(env('TOKEN')).then(async () => {
 
   // Set commands
-  CommandsManager.setGuildCommands(client, commands, SUPERMECHS_GUILD_ID)
+  try {
+    CommandsManager.setGuildCommands(client, commands, env('SUPERMECHS_GUILD_ID'))
+  } catch (err: any) {
+    console.error('Failed to set guild commands:', err)
+  }
+
+  // Init AutoThreader for #artwork
+  try {
+    await artworkThreader.init(client, env('ARTWORK_CHANNEL_ID'))
+  } catch (err: any) {
+    console.error(`Failed to init AutoThreader for artwork:`, err)
+  }
 
 })
 

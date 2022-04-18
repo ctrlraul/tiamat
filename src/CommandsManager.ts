@@ -108,7 +108,7 @@ export function importCommands (commandsDirectory: string): Record<string, Impor
 }
 
 
-export function handleInteraction (commands: Record<string, ImportedCommand>, interaction: CommandInteraction) {
+export async function handleInteraction (commands: Record<string, ImportedCommand>, interaction: CommandInteraction) {
 
   if (interaction.member === null) {
     return
@@ -122,18 +122,24 @@ export function handleInteraction (commands: Record<string, ImportedCommand>, in
 
     if (typeof interaction.member.permissions === 'string') {
 
-      interaction.reply({ content: `I have encountered an error! ${interaction.member.permissions}` })
+      interaction.reply({
+        content: `I have encountered an error! ${interaction.member.permissions}`
+      }).catch()
 
     } else if (hasPermissions(interaction.member.permissions, command.permissions)) {
 
-      command.execute(interaction, command)
+      try {
+        await command.execute(interaction, command)
+      } catch (err: any) {
+        console.error('Failed to execute command:', err)
+      }
 
     } else {
 
       interaction.reply({
         content: 'You do not have permission to use this command!',
         ephemeral: true
-      })
+      }).catch()
 
     }
 
