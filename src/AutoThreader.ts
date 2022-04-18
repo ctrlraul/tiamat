@@ -47,7 +47,8 @@ export class AutoThreader {
 
 
       message.startThread({
-        name: this.createThreadName(message)
+        name: this.createThreadName(message),
+        autoArchiveDuration: 4320
       }).catch(err => {
         console.error('Failed to create thread:', err)
       })
