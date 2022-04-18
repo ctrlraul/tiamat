@@ -1,7 +1,7 @@
+import * as CommandsManager from './CommandsManager'
 import { Client, Intents } from 'discord.js'
 import { join } from 'path'
 import { env } from './utils/env'
-import * as CommandsManager from './CommandsManager'
 import { AutoThreader } from './AutoThreader'
 
 
