@@ -36,7 +36,7 @@ export class AutoThreader {
         return
       }
 
-      if (message.type !== 'DEFAULT') {
+      if (message.type !== 'DEFAULT' && message.type !== 'REPLY') {
         return
       }
 
