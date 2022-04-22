@@ -41,10 +41,15 @@ export class AutoThreader {
       }
 
       if (!message.attachments.size) {
-        message.delete().catch()
+        message.delete().catch(err => {
+          console.error('Failed to delete message:', err)
+        })
         return
       }
 
+      message.react('👍').catch(err => {
+        console.error('Failed to react to message:', err)
+      })
 
       message.startThread({
         name: this.createThreadName(message),
