@@ -125,10 +125,10 @@ export const command: Command = {
       .setDescription('The item name')
       .setRequired(true)
     )
-    .addBooleanOption(option => option
-      .setName('public')
-      .setDescription('Whether should show it for everyone')
-    )
+    // .addBooleanOption(option => option
+    //   .setName('public')
+    //   .setDescription('Whether should show it for everyone')
+    // )
 		.setName('item')
 		.setDescription('Query item info'),
 
