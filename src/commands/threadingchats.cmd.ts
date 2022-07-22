@@ -25,11 +25,10 @@ export const command: Command = {
 
     try {
 
-      const chats = await Database.getChannelsThreading(interaction.guildId);
+      const chatIDs = await Database.getChannelsThreading(interaction.guildId);
 
       interaction.reply({
-        content: chats.join(', '),
-        ephemeral: true,
+        content: chatIDs.map(id => `<#${id}>`).join(', '),
       }).catch();
 
     } catch(err: any) {
