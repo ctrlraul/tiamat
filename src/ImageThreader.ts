@@ -67,7 +67,7 @@ export class ImageThreader {
       return;
     }
 
-    // message.react('👍').catch();
+    message.react('👍').catch();
 
     message.startThread({
       name: this.createThreadName(message),
