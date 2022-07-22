@@ -14,7 +14,7 @@ export const command: Command = {
       .setDescription('Whether threading should be enabled')
       .setRequired(true)
     )
-		.setDescription('Enables auto threading in the chat you\'re in.'),
+		.setDescription('Enables or disables auto threading in the chat you\'re in.'),
 
 	async execute (interaction) {
 
