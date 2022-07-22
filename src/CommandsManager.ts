@@ -34,7 +34,7 @@ const commandFileTest = /\.cmd\.\w+$/
 
 // Functions
 
-export async function setGuildCommands (client: Discord.Client, commandsMap: Record<string, Command>, guildID: string) {
+export async function setCommands (client: Discord.Client, commandsMap: Record<string, Command>): Promise<void> {
 
   if (client.token === null || client.user === null) {
     throw new Error('Login before setting the commands!')
@@ -49,8 +49,8 @@ export async function setGuildCommands (client: Discord.Client, commandsMap: Rec
 
   try {
 
-		await rest.put(
-			Routes.applicationGuildCommands(client.user.id, guildID),
+    await rest.put(
+			Routes.applicationCommands(client.user.id),
 			{ body: commandJSONs },
 		)
 
