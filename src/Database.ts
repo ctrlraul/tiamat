@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { Guild, TextBasedChannel } from 'discord.js'
+import { TextBasedChannel } from 'discord.js'
 import { env } from './utils/env';
 
 
@@ -12,21 +12,18 @@ export class Database {
   );
 
 
-  public static async getLogsChannel(guild: Guild): Promise<TextBasedChannel> {
+  public static async getLogsChannelID(guildID: string): Promise<string> {
 
     const { data, error } = await this.supabase
       .from('guilds')
       .select('logs_channel')
-      .eq('id', guild.id)
+      .eq('id', guildID)
     
     if (error) {
       throw error;
     }
 
-    const logsChannelID: string = data[0].logs_channel;
-    const channel = await guild.channels.fetch(logsChannelID);
-
-    return channel as TextBasedChannel;
+    return data[0].logs_channel;
 
   }
 

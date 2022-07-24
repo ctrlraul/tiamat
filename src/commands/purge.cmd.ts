@@ -1,55 +1,80 @@
-// TODO: Delete messages from specific users
-
-
-
-import Discord, { Collection } from 'discord.js'
+import Discord, { Collection, TextChannel, Message, Channel } from 'discord.js'
 import { SlashCommandBuilder } from '@discordjs/builders'
 import { Command } from '../CommandsManager';
-import { chunk } from '../utils/chunk';
-import { env } from '../utils/env'
+import { Database } from '../Database';
 
 
 
-const matchAllNumbersAtTheEnd = /(\d+)\/?$/
-let logsChannel: Discord.TextBasedChannel
+// Config
+
+const MESSAGES_PER_BATCH: number = 100; // Max 100
+const MATCH_TRAILLING_NUMBERS = /(\d+)\/?$/;
+
 
 
 // Functions
 
-async function getMessagesToDelete (interaction: Discord.CommandInteraction, messageID: string) {
+async function getMessagesAfterMessage (message: Message): Promise<Collection<string, Message>> {
 
-  if (interaction.channel === null) {
-    throw new Error('Trying to get messages in null channel')
-  }
-
-  const message = await interaction.channel.messages.fetch(messageID)
-  const messagesToDelete: Discord.Message[] = [message]
-
-  if (passedTwoWeeks(message.createdTimestamp)) {
-    throw new Error(`Can't delete messages that are over two weeks old!`)
-  }
-
-  const next100Messages = await interaction.channel.messages.fetch({
+  const messages = await message.channel.messages.fetch({
     after: message.id,
-    limit: 100
-  })
+    limit: MESSAGES_PER_BATCH,
+  });
 
-  next100Messages.mapValues(message => messagesToDelete.push(message))
+  if (messages.size === MESSAGES_PER_BATCH) {
+  
+    // Check if we got the maximum amount of messages per batch, if so we
+    // continue starting from the last message in this batch.
+    const nextBatch = await getMessagesAfterMessage(messages.last()!);
 
-  // Got the maximum messages, so let's check if there is more
-  if (messagesToDelete.length === 100) {
-    const more = await getMessagesToDelete(interaction, next100Messages.last()!.id)
-    messagesToDelete.push(...more)
+    return messages.concat(nextBatch);
+  
   }
 
-  return messagesToDelete
+  return messages;
 
 }
 
 
-// https://github.com/discord/discord-api-docs/issues/208
-function passedTwoWeeks (timestamp: number) {
+function passedTwoWeeks (timestamp: number): boolean {
   return timestamp <= Date.now() - 14 * 24 * 60 * 60 * 1000
+}
+
+
+function getMessageID(linkOrID: string): string | null {
+
+  const match = linkOrID.match(MATCH_TRAILLING_NUMBERS);
+
+  if (!match) {
+    return null;
+  }
+
+  return match[1];
+
+}
+
+
+function chunkCollection<K, T>(collection: Collection<K, T>, chunkSize: number): Collection<K, T>[] {
+
+  const chunks: Collection<K, T>[] = [];
+
+  let currentChunk: Collection<K, T> = new Collection();
+
+  collection.forEach((value, key) => {
+
+    if (currentChunk.size === chunkSize) {
+      chunks.push(currentChunk);
+      currentChunk = new Collection();
+    }
+
+    currentChunk.set(key, value);
+
+  });
+
+  chunks.push(currentChunk);
+
+  return chunks;
+
 }
 
 
@@ -65,146 +90,136 @@ export const command: Command = {
 
   data: new SlashCommandBuilder()
     .addStringOption(option => option
-      .setName('link')
-      .setDescription('The link of the message to begin deleting from. (Message ID works too!)')
+      .setName('message')
+      .setDescription('The Link or ID of the message to delete everything after it.')
       .setRequired(true)
     )
-    .setName('purge')
-    .setDescription('Deletes a message and everything after it'),
+    .setName('purgeafter')
+    .setDescription('Deletes everything after a message.'),
 
 
   async execute (interaction, cmd) {
 
-    if (interaction.channel === null || interaction.guild === null) {
-      return
+    // This already makes sure it's not being used from DMs
+    if (!interaction.channel || !interaction.guild) {
+      return interaction.reply({ content: `I can't purge here.` });
     }
 
 
-    // Make sure we can log who's purging
-    if (logsChannel === undefined) {
+    const messageID = getMessageID(
+      interaction.options.getString('message', true)
+    );
 
-      const channel = await interaction.guild.channels.fetch(env('LOGS_CHANNEL_ID'))
+    if (!messageID) {
+      return interaction.reply({
+        content: `Invalid message Link or ID.`,
+        ephemeral: true,
+      });
+    }
 
-      if (channel === null) {
-        throw new Error('Failed to fetch logs channel')
+
+    let messagesToDelete: Collection<string, Message>;
+
+    try {
+
+      // Let Discord know this interaction may take a while...
+      await interaction.deferReply({ ephemeral: true });
+
+      const referenceMessage = await interaction.channel.messages.fetch(messageID);
+
+      // Can't delete messages over two weeks old, see:
+      // https://github.com/discord/discord-api-docs/issues/208
+      if (passedTwoWeeks(referenceMessage.createdTimestamp)) {
+        throw new Error(`Messages over two weeks old cannot be deleted!`);
       }
 
-      if (!channel.isText()) {
-        throw new Error('Logs channel must be a text channel')
-      }
+      messagesToDelete = await getMessagesAfterMessage(referenceMessage);
 
-      logsChannel = channel
+    } catch(err: any) {
+
+      return interaction.reply({
+        content: `Failed to get messages to delete: ${err.message}`,
+        ephemeral: true,
+      });
 
     }
 
+    const batches = chunkCollection(messagesToDelete, MESSAGES_PER_BATCH);
+    const channel: TextChannel = interaction.channel as TextChannel;
+    let messagesDeletedCount: number = 0;
+    let messagesFailedCount: number = 0;
 
-    // Ignore attempts to purge DMs, we can't do that
-    if (interaction.channel.type === 'DM') {
-      interaction.reply({ content: `I can't purge DMs` })
-      return
-    }
-
-
-    const msgLinkOrID = interaction.options.getString('link', true)
-    const match = msgLinkOrID.match(matchAllNumbersAtTheEnd)
-
-
-    if (match === null) {
-
-      interaction.reply({ content: `Invalid message link or id.`, ephemeral: true })
-      
-    } else {
+    for (const batch of batches) {
 
       try {
 
-        const messagesPerBatch = 100 // Max 100
-        const messagesToDelete = await getMessagesToDelete(interaction, match[1])
-        const batches = chunk(messagesToDelete, messagesPerBatch)
+        // Yes, this halts the loop until the promise resolves, we would like
+        // to keep it that way so it doesn't send too many requests too fast.
+        await channel.bulkDelete(batch);
 
-        let successfulDeletesCount = 0
-        let failedDeletesCount = 0
-        let tooOldCount = 0
+        messagesDeletedCount += batch.size;
 
-
-        for (const batch of batches) {
-
-          const collection = new Collection<string, Discord.Message>()
-
-          for (const message of batch) {
-
-            if (passedTwoWeeks(message.createdTimestamp)) {
-              tooOldCount++
-            } else {
-              collection.set(message.id, message)
-            }
-
-          }
-
-          try {
-
-            await interaction.channel.bulkDelete(collection)
-
-            successfulDeletesCount += batch.length
-
-          } catch (err: any) {
-
-            failedDeletesCount += batch.length
-
-          }
-
-        }
-
-
-        const lines: string[] = []
-
-        if (successfulDeletesCount > 0) {
-          lines.push(`Successfuly deleted ${successfulDeletesCount} messages`)
-        }
-
-        if (failedDeletesCount > 0) {
-          lines.push(`Failed to delete ${failedDeletesCount} messages`)
-        }
-
-        if (tooOldCount > 0) {
-          lines.push(`${tooOldCount} messages are too old to be deleted`)
-        }
-
-        if (lines.length === 0) {
-          lines.push('Succesfuly did nothing')
-        }
-
-
-        // Feedback
-        interaction.reply({
-          content: lines.join('\n'),
-          ephemeral: true
-        })
-
-
-        // Log
-        const embed = new Discord.MessageEmbed()
-
-        embed.setAuthor({
-          name: `${interaction.user.tag} (${interaction.user.id})`,
-          iconURL: interaction.user.avatarURL() || interaction.user.defaultAvatarURL,
-        })
-        
-        embed.setDescription(`**/${cmd.data.name}** called in ${interaction.channel.toString()}\n\n${lines.join('\n')}`)
-        embed.setColor('#aa2211')
-
-        logsChannel.send({ embeds: [embed] })
-          .catch(err => console.error('Failed to send embed in logs channel:', err))
-
-      } catch (err: any) {
-
-        interaction.reply({
-          content: 'Failed to purge: ' + err.message,
-          ephemeral: true
-        })
-        
+      } catch(err: any) {
+        messagesFailedCount += batch.size;
       }
 
     }
+    
+
+    const replyLines: string[] = [];
+    let logsChannel: Channel | null = null;
+
+    try {
+
+      const logsChannelID = await Database.getLogsChannelID(interaction.guild.id);
+
+      if (logsChannelID) {
+        logsChannel = await interaction.guild.channels.fetch(logsChannelID);
+      } else {
+        replyLines.push('Warning! No logs channel configured, use `/loghere` to set the logs channel.');
+      }
+
+    } catch(err: any) {
+      replyLines.push(`Failed to get logs channel: ${err.message}`);
+    }
+
+    replyLines.push(`Deleted ${messagesDeletedCount} out of ${messagesToDelete.size} messages.`);
+
+    if (messagesFailedCount) {
+      replyLines.push(`Failed to delete ${messagesFailedCount} messages`);
+    }
+
+
+    // Log deletion
+
+    if (logsChannel) {
+
+      const embed = new Discord.MessageEmbed({
+        author: {
+          name: `${interaction.user.tag} (${interaction.user.id})`,
+          iconURL: interaction.user.avatarURL() || interaction.user.defaultAvatarURL,
+        },
+        description: `\`/${cmd.data.name}\` called in <#${interaction.channel.id}>`,
+        color: '#aa2211',
+        fields: [{
+          name: 'Result:',
+          value: replyLines.join('\n'),
+        }]
+      })
+
+      try {
+        await (logsChannel as TextChannel).send({ embeds: [embed] });
+      } catch(err: any) {
+        replyLines.push('Failed to send embed in logs chat: ' + err.message);
+      }
+
+    }
+
+
+    // Feedback
+
+    interaction.editReply({ content: replyLines.join('\n') }).catch();
+
   }
 
 }
