@@ -108,42 +108,29 @@ export function importCommands (commandsDirectory: string): Record<string, Impor
 }
 
 
-export async function handleInteraction (commands: Record<string, ImportedCommand>, interaction: CommandInteraction) {
+export async function handleInteraction (commands: Record<string, ImportedCommand>, interaction: CommandInteraction): Promise<ImportedCommand> {
 
-  if (interaction.member === null) {
-    return
+  if (!interaction.member) {
+    throw new Error(`Interaction member is null`);
   }
 
-  if (interaction.commandName in commands) {
-
-    const command = commands[interaction.commandName]
-
-    console.log('[CommandsManager] Handling command:', command.data.name)
-
-    if (typeof interaction.member.permissions === 'string') {
-
-      interaction.reply({
-        content: `I have encountered an error! ${interaction.member.permissions}`
-      }).catch()
-
-    } else if (hasPermissions(interaction.member.permissions, command.permissions)) {
-
-      try {
-        await command.execute(interaction, command)
-      } catch (err: any) {
-        console.error('Failed to execute command:', err)
-      }
-
-    } else {
-
-      interaction.reply({
-        content: 'You do not have permission to use this command!',
-        ephemeral: true
-      }).catch()
-
-    }
-
+  if (!(interaction.commandName in commands)) {
+    throw new Error(`Command '${interaction.commandName}' not found!`);
   }
+
+  const command = commands[interaction.commandName];
+
+  if (typeof interaction.member.permissions === 'string') {
+    throw new Error(`Idk what to do with this permissions format: ${interaction.member.permissions}`);
+  }
+  
+  if (!hasPermissions(interaction.member.permissions, command.permissions)) {
+    throw new Error(`Lack of permission!`);
+  }
+
+  await command.execute(interaction, command);
+
+  return command;
 
 }
 

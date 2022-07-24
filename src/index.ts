@@ -63,15 +63,17 @@ client.on('ready', async () => {
 
 client.on('interactionCreate', interaction => {
 
-  if (!interaction.isCommand()) {
-    return
+  if (!interaction.isCommand() || !interaction.guild) {
+    return;
   }
 
-  CommandsManager.handleInteraction(commands, interaction).catch(err => {
-    console.error('Failed to handle command: ', err);
+  CommandsManager.handleInteraction(commands, interaction).then(cmd => {
+    console.log(`Command '${cmd.data.name}' called from '${interaction.guild!.name}'`);
+  }).catch(err => {
+    console.error(`Failed to handle command from '${interaction.guild!.name}':`, err.message);
   });
 
-})
+});
 
 
 client.on('guildCreate', async guild => {
