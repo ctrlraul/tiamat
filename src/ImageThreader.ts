@@ -83,13 +83,13 @@ export class ImageThreader {
   private static createThreadName(message: Message): string {
 
     if (message.content.length) {
-      return message.content;
+      return message.content.slice(0, 80);
     }
 
     const firstAttachment = message.attachments.first();
 
     if (firstAttachment && firstAttachment.name) {
-      return firstAttachment.name;
+      return firstAttachment.name.slice(0, 80);
     }
 
     return message.id;
